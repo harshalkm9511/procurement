@@ -1,38 +1,45 @@
-```mermaid
-flowchart TD
-    SUPABASE[SUPABASE]
+# ProcureAI — Database Architecture
 
-    SUPABASE --> AUTH[SUPABASE AUTH]
-    SUPABASE --> DB[POSTGRESQL]
+## Supabase Database Architecture
 
-    AUTH --> USERS[auth.users]
-    USERS --> PROFILES[profiles]
+<pre>
+                 SUPABASE
+                    │
+        ┌───────────┴───────────┐
+        │                       │
+   SUPABASE AUTH            POSTGRESQL
+        │                       │
+        │                 ┌─────┴─────┐
+        │                 │           │
+        ▼                 ▼           ▼
+    auth.users       CORE DATA    INTELLIGENCE
+        │                 │           │
+        ▼                 │           ├─ requirement_validations
+     profiles             │           ├─ dependency_definitions
+                          │           ├─ decision_simulations
+                          │           ├─ simulation_scenarios
+                          │           └─ ai_recommendations
+                          │
+                          ├─ suppliers
+                          ├─ rfqs
+                          ├─ quotations
+                          ├─ purchase_orders
+                          ├─ inventory_items
+                          ├─ assets
+                          ├─ spend_records
+                          ├─ historical_data
+                          ├─ supplier_risk_assessments
+                          └─ price_forecasts
 
-    DB --> CORE[CORE DATA]
-    DB --> INTEL[Intelligence]
+                    AI / SYSTEM
+                          │
+              ┌───────────┼───────────┐
+              ▼           ▼           ▼
+       conversations  notifications  reports
+              │
+              ▼
+       chat_messages
 
-    CORE --> SUPPLIERS[suppliers]
-    CORE --> RFQ[rfqs]
-    CORE --> QUOTATIONS[quotations]
-    CORE --> PO[purchase_orders]
-    CORE --> INVENTORY[inventory_items]
-    CORE --> ASSETS[assets]
-    CORE --> SPEND[spend_records]
-    CORE --> HISTORY[historical_data]
-    CORE --> RISK[supplier_risk_assessments]
-    CORE --> FORECAST[price_forecasts]
-
-    INTEL --> VALIDATION[requirement_validations]
-    INTEL --> DEPENDENCY[dependency_definitions]
-    INTEL --> SIMULATION[decision_simulations]
-    INTEL --> SCENARIOS[simulation_scenarios]
-    INTEL --> AI[ai_recommendations]
-
-    DB --> SYSTEM[AI / SYSTEM]
-
-    SYSTEM --> CONV[conversations]
-    CONV --> MESSAGES[chat_messages]
-    SYSTEM --> NOTIFICATIONS[notifications]
-    SYSTEM --> REPORTS[reports]
-    SYSTEM --> AUDIT[audit_logs]
-```
+              +
+         audit_logs
+</pre>
