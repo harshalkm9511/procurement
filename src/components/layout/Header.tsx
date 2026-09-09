@@ -24,9 +24,8 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed }) => {
   return (
     <>
       <header
-        className={`fixed top-0 right-0 z-30 h-16 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/80 transition-all duration-300 flex items-center justify-between px-6 ${
-          sidebarCollapsed ? 'left-20' : 'left-64'
-        }`}
+        className={`fixed top-0 right-0 z-30 h-16 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/80 transition-all duration-300 flex items-center justify-between px-6 ${sidebarCollapsed ? 'left-20' : 'left-64'
+          }`}
       >
         {/* Left: Global Search trigger */}
         <div className="flex items-center gap-4">
@@ -46,18 +45,12 @@ export const Header: React.FC<HeaderProps> = ({ sidebarCollapsed }) => {
             onClick={() => setActivePage('assistant')}
             className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-medium hover:bg-cyan-500/20 transition-colors"
           >
-            <Cpu className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
             <span>AI Assistant</span>
           </button>
         </div>
 
         {/* Right: Quick Stats, Notifications & User */}
         <div className="flex items-center gap-4">
-          {/* Real-time system pulse */}
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>AI Risk Engine Active</span>
-          </div>
 
           {/* Notification Bell */}
           <button

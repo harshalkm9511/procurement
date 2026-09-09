@@ -1,4 +1,3 @@
-import React from 'react';
 import { ProcurementProvider, useProcurement } from './context/ProcurementContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { AuthViews } from './components/auth/AuthViews';

@@ -143,17 +143,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => 
       </div>
 
       {/* Footer Profile Mini Card */}
-      {!collapsed && (
-        <div className="p-3 border-t border-slate-800/80 bg-slate-900/40">
-          <div className="flex items-center gap-3 p-2 rounded-xl bg-slate-900/80 border border-slate-800">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <div className="flex-1 overflow-hidden">
-              <p className="text-xs font-semibold text-slate-200 truncate">System Operational</p>
-              <p className="text-[10px] text-slate-400">AI Analytics Connected</p>
-            </div>
-          </div>
-        </div>
-      )}
+     
     </aside>
   );
 };
