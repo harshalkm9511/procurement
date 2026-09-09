@@ -17,11 +17,12 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 interface NavItem {
   id: string;
   label: string;
-  icon: any;
+  icon: LucideIcon;
   badge?: string;
   badgeColor?: string;
 }

@@ -3,21 +3,25 @@ import { useProcurement } from '../../context/ProcurementContext';
 import { Sparkles, ArrowRight, ShieldCheck, Lock, Mail, User as UserIcon, Building, KeyRound, CheckCircle2 } from 'lucide-react';
 
 export const AuthViews: React.FC = () => {
-  const { loginWithDemo } = useProcurement();
+  const { loginWithDemo, loginWithCredentials, registerAccount, authError } = useProcurement();
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login');
   
   const [email, setEmail] = useState('alex.vance@procureai.enterprise.com');
-  const [password, setPassword] = useState('••••••••••••');
+  const [password, setPassword] = useState('');
   const [name, setName] = useState('Alex Vance');
   const [org, setOrg] = useState('Apex Industrial Technologies');
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (mode === 'forgot') {
       setForgotSubmitted(true);
     } else {
-      loginWithDemo();
+      if (mode === 'signup') {
+        await registerAccount(email, password, name, org).catch(() => undefined);
+      } else {
+        await loginWithCredentials(email, password).catch(() => undefined);
+      }
     }
   };
 
@@ -72,7 +76,7 @@ export const AuthViews: React.FC = () => {
           <div className="mb-6">
             <button
               type="button"
-              onClick={loginWithDemo}
+              onClick={() => void loginWithDemo()}
               className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 via-cyan-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-sm shadow-xl shadow-cyan-500/20 flex items-center justify-center gap-2.5 transition-all transform hover:scale-[1.02]"
             >
               <Sparkles className="w-4 h-4 text-cyan-200 animate-pulse" />
@@ -83,6 +87,12 @@ export const AuthViews: React.FC = () => {
               Instant access with full demo dataset & AI features pre-loaded
             </p>
           </div>
+
+          {authError && (
+            <div className="mb-5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300" role="alert">
+              {authError}
+            </div>
+          )}
 
           <div className="relative flex items-center justify-center mb-6">
             <div className="border-t border-slate-800 w-full" />

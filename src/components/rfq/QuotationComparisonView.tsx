@@ -29,6 +29,10 @@ export const QuotationComparisonView: React.FC = () => {
 
   const currentRFQ = rfqs.find(r => r.id === selectedRFQId) || rfqs[0];
 
+  if (!currentRFQ) {
+    return <div className="glass-panel rounded-3xl border border-slate-800 p-8 text-sm text-slate-400">No RFQs are available for this workspace.</div>;
+  }
+
   // Get quotations for current RFQ
   const currentQuotes = quotations.filter(q => q.rfqId === currentRFQ.id);
 

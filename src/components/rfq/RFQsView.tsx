@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useProcurement } from '../../context/ProcurementContext';
 import type { RFQ } from '../../types/procurement';
 import { FileText, Plus, Search, Calendar, DollarSign, Users, ChevronRight, X, Sparkles, CheckCircle2 } from 'lucide-react';
@@ -7,6 +7,7 @@ export const RFQsView: React.FC = () => {
   const { rfqs, suppliers, createRFQ, setActivePage, setSelectedRFQId } = useProcurement();
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Form State
   const [product, setProduct] = useState('');
@@ -17,7 +18,14 @@ export const RFQsView: React.FC = () => {
   const [deadline, setDeadline] = useState('2026-09-15');
   const [deliveryDate, setDeliveryDate] = useState('2026-10-01');
   const [description, setDescription] = useState('');
-  const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>(['sup-001', 'sup-004']);
+  const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
+
+  useEffect(() => {
+    setSelectedSuppliers((current) => {
+      const validCurrent = current.filter((id) => suppliers.some((supplier) => supplier.id === id));
+      return validCurrent.length > 0 ? validCurrent : suppliers.slice(0, 2).map((supplier) => supplier.id);
+    });
+  }, [suppliers]);
 
   const filteredRFQs = rfqs.filter(r =>
     r.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -25,23 +33,29 @@ export const RFQsView: React.FC = () => {
     r.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!product) return;
 
-    createRFQ({
-      title: product,
-      product,
-      category,
-      quantity,
-      unit,
-      targetPrice,
-      deadline,
-      invitedSuppliersCount: selectedSuppliers.length,
-      deliveryDate,
-      description,
-      invitedSupplierIds: selectedSuppliers
-    });
+    setFormError(null);
+    try {
+      await createRFQ({
+        title: product,
+        product,
+        category,
+        quantity,
+        unit,
+        targetPrice,
+        deadline,
+        invitedSuppliersCount: selectedSuppliers.length,
+        deliveryDate,
+        description,
+        invitedSupplierIds: selectedSuppliers
+      });
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Unable to create RFQ');
+      return;
+    }
 
     setIsModalOpen(false);
     // Reset form
@@ -185,6 +199,7 @@ export const RFQsView: React.FC = () => {
             </div>
 
             <form onSubmit={handleFormSubmit} className="space-y-4 overflow-y-auto pr-1 flex-1">
+              {formError && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300" role="alert">{formError}</div>}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">Product Name / Title</label>
                 <input

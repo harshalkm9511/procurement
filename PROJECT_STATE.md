@@ -71,7 +71,7 @@ procurement--main/
 │   │   └── spend/
 │   │       └── SpendAnalyticsView.tsx # Category & vendor spend analytics charts
 │   ├── context/
-│   │   └── ProcurementContext.tsx  # Centralized React Context state & localStorage sync
+│   │   └── ProcurementContext.tsx  # Centralized React Context state & API-backed UI state
 │   ├── data/
 │   │   └── mockData.ts             # Static mock datasets for all procurement entities (1170+ lines)
 │   ├── types/
@@ -131,27 +131,27 @@ procurement--main/
                                                                   v
                                                      +--------------------------+
                                                      |    Active View Component |
-                                                     | (switch on `activePage`) |
+                                                     |  (React Router `Routes`)  |
                                                      +--------------------------+
                                                                   |
                                                                   v
                                                      +--------------------------+
                                                      |   ProcurementContext     |
-                                                     |  (React State & LocalS)  |
+                                                     |  (React State & API data) |
                                                      +--------------------------+
                                                                   |
                                                                   v
                                                      +--------------------------+
-                                                     |     src/data/mockData.ts |
+                                                     |     src/services/api.ts  |
                                                      +--------------------------+
 ```
 
 ### Communication Flow:
-1. **Routing:** State-based routing handled by `activePage` in `ProcurementContext.tsx`. `App.tsx` conditionally mounts the appropriate view component. There is **no URL path routing** (no React Router).
+1. **Routing:** React Router handles URL paths and deep links in `App.tsx`; `ProcurementContext` keeps selection state synchronized with navigation.
 2. **State Management:** All state (`suppliers`, `rfqs`, `quotations`, `purchaseOrders`, `inventory`, `notifications`, `recommendations`, `chatMessages`, `scoringWeights`) is stored in React `useState` hooks inside `ProcurementContext.tsx`.
-3. **Persistence:** On initial mount, state falls back to `mockData.ts`. Any state mutation automatically synchronizes to browser `localStorage` (`procureai_suppliers`, `procureai_rfqs`, `procureai_quotations`, `procureai_orders`, `procureai_inventory`, `procureai_notifications`).
-4. **Data Access:** All components access and modify global state via the `useProcurement()` hook.
-5. **API & Services Layer:** **0 external network calls exist.** All AI operations (e.g., quotation evaluation, risk scans, reorder recommendations) trigger simulated progress timers (`setInterval`) inside `ProcurementContext.tsx` that update local state directly.
+3. **Persistence:** Phase 2 procurement records are loaded from the Express API through `src/services/api.ts`; only UI notifications remain in browser `localStorage`.
+4. **Data Access:** All components access global state via the `useProcurement()` hook.
+5. **API & Services Layer:** Protected requests use the Supabase access token through the Vite `/api` proxy. Intelligence-only simulations still use local timers because no Phase 2 backend API exists for them.
 
 ---
 
@@ -159,13 +159,13 @@ procurement--main/
 
 | Route (`activePage`) | Purpose | Main Component | Primary User Actions | Data Displayed | Implementation Status | Key Dependencies |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `auth` (`!isAuthenticated`) | User login, signup & demo access | `AuthViews.tsx` | Demo Login, Sign In, Register, Password Reset submit | Pre-filled demo user credentials, security certifications | Fully functional UI with local state toggle | `lucide-react`, `ProcurementContext` |
-| `dashboard` | Executive procurement overview | `DashboardView.tsx` | Click KPI cards to navigate, click recommendation cards to route to target entities | Total Spend ($1.24M), Active Suppliers (128), Open RFQs (24), Potential Savings ($184K), AI Recs, High Risk alerts | Fully implemented UI, static KPI totals | `lucide-react`, `ProcurementContext` |
-| `suppliers` | Supplier relationship & performance directory | `SuppliersView.tsx` | Filter by risk/category, search, select supplier detail, trigger AI Risk Scan | Supplier list, performance scores, quality scores, risk levels, financial/delivery risk breakdown | Fully implemented UI with local state selection | `lucide-react`, `ProcurementContext` |
-| `rfqs` | Request for Quotation management | `RFQsView.tsx` | Search, open Create RFQ modal form, submit new RFQ, navigate to Quotations view | RFQ list, status badges, invited suppliers count, target price, deadline | Fully implemented UI with real state insertion to `localStorage` | `lucide-react`, `ProcurementContext` |
+| `auth` (`!isAuthenticated`) | User login, signup & session access | `AuthViews.tsx` | Sign In, Register, Password Reset submit | Supabase-authenticated session and backend authorization | Connected to browser-safe Supabase auth; demo button reuses an existing session only | `lucide-react`, `ProcurementContext` |
+| `dashboard` | Executive procurement overview | `DashboardView.tsx` | Click KPI cards to navigate, click recommendation cards to route to target entities | Spend, active suppliers, open RFQs, savings and risk alerts derived from loaded API records | API-backed Phase 2 KPIs; intelligence cards remain UI-only where no endpoint exists | `lucide-react`, `ProcurementContext` |
+| `suppliers` | Supplier relationship & performance directory | `SuppliersView.tsx` | Filter by risk/category, search, select supplier detail, trigger AI Risk Scan | Supplier list, performance scores, quality scores, risk levels, financial/delivery risk breakdown | Supplier records loaded from `/api/suppliers`; risk scan remains intelligence-only | `lucide-react`, `ProcurementContext` |
+| `rfqs` | Request for Quotation management | `RFQsView.tsx` | Search, open Create RFQ modal form, submit new RFQ, navigate to Quotations view | RFQ list, status badges, invited suppliers count, target price, deadline | API-backed list and create flow, including RFQ-supplier links | `lucide-react`, `ProcurementContext` |
 | `quotations` | Multi-criteria quotation evaluation matrix | `QuotationComparisonView.tsx` | Select RFQ dropdown, adjust scoring weight sliders, trigger AI evaluation timer, award PO | Side-by-side quotation comparison table, unit prices, delivery days, quality ratings, AI scores, recommended quote callout | Fully implemented UI; weight sliders update state but don't recalculate raw scores | `lucide-react`, `ProcurementContext` |
 | `orders` | Purchase Orders (POs) tracking | `PurchaseOrdersView.tsx` | Search POs by ID/supplier/product, click "Award PO from RFQ" | PO list, total amounts, expected delivery dates, fulfillment status badges | Fully implemented UI | `lucide-react`, `ProcurementContext` |
-| `inventory` | Stock inventory & demand monitoring | `InventoryView.tsx` | Filter by category, trigger AI Reorder Recommendation for critical items | Inventory table, SKU, stock levels, daily demand, reorder points, stock status badges | Fully implemented UI; reorder action auto-creates an RFQ in state | `lucide-react`, `ProcurementContext` |
+| `inventory` | Stock inventory & demand monitoring | `InventoryView.tsx` | Filter by category, trigger AI Reorder Recommendation for critical items | Inventory table, SKU, stock levels, daily demand, reorder points, stock status badges | Inventory records load from `/api/inventory`; reorder action creates an RFQ through the backend | `lucide-react`, `ProcurementContext` |
 | `spend` | Procurement spend analytics & trend visualization | `SpendAnalyticsView.tsx` | Toggle timeframe (7D, 30D, 3M, 12M) | Spend trend area chart, category spend pie chart, top 6 vendor spend bar chart | Fully implemented UI with Recharts visualizations | `recharts`, `lucide-react`, `ProcurementContext` |
 | `recommendations` | Catalog of AI-identified strategic recommendations | `AIRecommendationsView.tsx` | Filter by category/priority, click action links to navigate to specific workspace tools | List of AI recommendations, confidence percentages, potential cost impact, priority badges | Fully implemented UI with action routing | `lucide-react`, `ProcurementContext` |
 | `risk` | Supplier risk intelligence monitoring engine | `SupplierRiskView.tsx` | Select supplier, trigger AI Risk Scan, toggle mitigation plan view | Risk level distribution pie chart, risk breakdown meters, risk reason, recommended mitigation plan | Fully implemented UI with Recharts pie chart | `recharts`, `lucide-react`, `ProcurementContext` |
@@ -216,7 +216,7 @@ procurement--main/
 ## 6. Current User Flows
 
 ### Flow 1: RFQ Creation & Dispatch
-`User` → Navigation to `RFQs` view (`activePage = 'rfqs'`) → Clicks "+ Create RFQ" button → Fills form (Product Name, Category, Quantity, Unit, Target Price, Deadline, Delivery Date, Description, Invited Suppliers) → Submits Form → `createRFQ()` called in `ProcurementContext` → New RFQ object created with ID `RFQ-2026-xxx` → Added to `rfqs` state & saved to `localStorage` → New Notification generated → RFQ table updates instantly.
+`User` → Navigation to `RFQs` view → Clicks "+ Create RFQ" → Fills the form and selects real suppliers → `createRFQ()` posts to `/api/rfqs`, then posts each selected relationship to `/api/rfqs/:id/suppliers` → API response updates context state → notification is generated → RFQ table updates instantly.
 
 ### Flow 2: AI Quotation Evaluation & Awarding
 `User` → Navigation to `Quotations` view (`activePage = 'quotations'`) → Selects RFQ from dropdown → Reviews side-by-side quotations → Adjusts scoring weights (Price, Quality, Delivery, Risk, Performance) → Clicks "Evaluate Quotations with AI" → `evaluateQuotationsAI(rfqId)` triggers `AIProcessingModal` → Runs 4-step timed progress animation (900ms per step) → Updates winning quotation status to `RECOMMENDED` with 94% score → User clicks "Award PO" → Navigates to Purchase Orders view.
@@ -258,12 +258,12 @@ All domain data interfaces are declared in [src/types/procurement.ts](file:///c:
 ```
 +-----------------------------------------------------------------------------------+
 | REAL DATA                                                                         |
-| - None. 0 live backend APIs or external databases connected.                      |
+| - Phase 2 procurement records from the Express + Supabase API.                    |
 +-----------------------------------------------------------------------------------+
 | MOCK DATA                                                                         |
-| - All initial objects in `src/data/mockData.ts` (128 suppliers total spend,       |
-|   RFQ lists, quotation score values, mock chat transcripts, user profiles).       |
-| - Persisted locally in browser `localStorage`.                                    |
+| - Intelligence-only forecasts, recommendations, chat responses, and UI presets   |
+|   that have no Phase 2 backend endpoint.                                          |
+| - Notifications remain persisted locally in browser `localStorage`.               |
 +-----------------------------------------------------------------------------------+
 | ASSUMED DATA                                                                      |
 | - Solvency risk scores, 30-day commodity price trends, delivery delay variances,  |
@@ -279,10 +279,10 @@ All domain data interfaces are declared in [src/types/procurement.ts](file:///c:
 
 ## 8. API / Backend Integration
 
-* **Current Status:** **NO BACKEND EXISTS.**
-* **API Endpoints:** `0` endpoints.
-* **HTTP Client:** Neither `axios` nor native `fetch()` are used anywhere in the codebase.
-* **Authentication:** Simulated. `loginWithDemo()` sets `isAuthenticated = true` in React state and loads `initialUser` object. `logout()` sets `isAuthenticated = false`. No JWT, session cookies, OAuth2, or backend validation exist.
+* **Current Status:** Phase 2 Express + Supabase backend is connected for the frontend procurement datasets.
+* **API Endpoints:** Existing protected Phase 2 routes for suppliers, RFQs/RFQ suppliers, quotations, purchase orders, inventory, assets, and spend records.
+* **HTTP Client:** Native `fetch()` in `src/services/api.ts`, routed through Vite `/api` to `http://localhost:3001`.
+* **Authentication:** Browser Supabase authentication supplies the access token; the backend remains the authorization source. No service-role key is exposed to Vite.
 
 ---
 
@@ -343,11 +343,11 @@ All domain data interfaces are declared in [src/types/procurement.ts](file:///c:
 
 ---
 
-## 13. Missing Architecture
+## 13. Future Architecture (Phase 4+)
 
-To transition this frontend prototype into a production-ready application, the following backend components must be implemented:
+The Phase 2 CRUD backend and browser API integration are implemented. The following capabilities remain future work:
 
-1. **Backend API Service:** REST or GraphQL API server (e.g., Express, FastAPI, Go, NestJS) providing real HTTP endpoints for all procurement entities.
+1. **Intelligence API extensions:** Requirement validation, dependency analysis, simulation, and assistant endpoints must be added only in their respective future phases.
 2. **Database System:**
    * **Relational DB (PostgreSQL / MySQL):** For storing users, organizations, suppliers, RFQs, quotations, purchase orders, inventory, and audit trails.
    * **Graph DB (Neo4j / PostgreSQL Apache AGE):** For storing organizational asset dependency graphs and supply chain relationship trees.
@@ -357,18 +357,17 @@ To transition this frontend prototype into a production-ready application, the f
    * LLM Agent Integration (e.g., LangChain / LlamaIndex / Gemini API) for conversational assistant.
 4. **Procurement Decision Engine:** Deterministic calculation service for multi-criteria quotation scoring, total cost of ownership (TCO) evaluation, and counterfactual policy simulation.
 5. **Data Ingestion & ERP Connectors:** Ingestion pipelines for external ERP systems (SAP, Oracle, NetSuite), live commodity market data feeds, and supplier credit risk feeds.
-6. **Authentication & Authorization:** Production Auth framework (JWT, OAuth2, SAML/SSO, Clerk, Firebase Auth) with Role-Based Access Control (RBAC).
+6. **Authentication & Authorization:** Existing Supabase authentication and backend RBAC remain the source of truth; future phases may extend policy coverage.
 7. **Background Job Queue:** Asynchronous task queue (Redis + BullMQ / Celery) for long-running risk scans, price prediction updates, and notification triggers.
 
 ---
 
 ## 14. Technical Risks
 
-1. **Custom State-Based Navigation (`activePage`):** The app uses string state in `ProcurementContext` instead of standard browser routing (e.g., React Router). **Consequences:** Browser `Back` and `Forward` buttons do not work; URLs cannot be bookmarked or shared; deep-linking requires manual context state manipulation.
-2. **`localStorage` Data Serialization:** The app serializes entire entity arrays to `localStorage`. **Consequences:** Adding new required fields to TypeScript interfaces in future updates will cause runtime errors for users with old cached `localStorage` data until cleared.
-3. **Hardcoded AI & Scoring Disconnect:** Weight sliders in `QuotationComparisonView` update `scoringWeights` state, but overall quotation scores (e.g. `94%`) do not recalculate. **Consequences:** Future developers might assume the scoring matrix logic is functioning when it is entirely static.
-4. **No Error Boundaries or Form Validation:** Forms (e.g., Create RFQ, Login) perform minimal validation and lack global React Error Boundaries.
-5. **In-Memory Data Scaling:** All 128 suppliers, RFQs, quotations, and inventory items are loaded into client memory simultaneously. **Consequences:** Will cause browser memory degradation if connected directly to large enterprise datasets without backend pagination.
+1. **Authenticated browser verification:** A signed-in Supabase user/profile and Vite public environment variables are required to verify protected API data in a live browser session.
+2. **Hardcoded AI & Scoring Disconnect:** Weight sliders in `QuotationComparisonView` update `scoringWeights` state, but overall quotation scores (e.g. `94%`) do not recalculate. **Consequences:** Future intelligence work must replace this UI-only behavior with an explicit backend capability.
+3. **No Error Boundaries or Form Validation:** Forms (e.g., Create RFQ, Login) perform minimal validation and lack global React Error Boundaries.
+4. **In-Memory Data Scaling:** Current context loads paginated API results into client memory. Larger enterprise datasets may require view-level pagination rather than loading all pages at once.
 
 ---
 
@@ -437,18 +436,18 @@ When implementing real backend integration and pre-procurement capabilities, the
 * **Linting:** `npm run lint` (Runs `oxlint`)
 
 ### Environment Variables:
-* Currently **no `.env` file or environment variables exist** in the repository.
+* Frontend configuration is documented in `.env.example` using only public `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` values. No service-role secret is exposed to Vite.
 
 ---
 
 ## 18. Current Problems / TODOs
 
-1. **Zero Real Backend Connection:** All data is read from `mockData.ts` or `localStorage`.
+1. **Authenticated browser runtime limitation:** This checkout has no Vite Supabase environment variables or signed-in user/profile, so protected API data cannot be displayed in a live browser session here. The API integration and backend authorization contract are verified separately.
 2. **Missing Dependency Graph Component:** The project currently has no visual UI or data model for the "Implicit Dependency Graph" feature.
 3. **Missing Intent Interceptor UI:** RFQ creation does not intercept user intent to evaluate internal asset availability prior to purchase.
 4. **Static PDF Report Export:** Clicking "Export PDF" in `ReportsView.tsx` triggers a browser `alert()` pop-up stub (`"Downloading ProcureAI REPORT Report (PDF Format)..."`).
 5. **Static Quotation Overall Score:** Adjusting sliders in `SettingsView.tsx` or `QuotationComparisonView.tsx` updates state but does NOT re-evaluate overall quotation scores dynamically.
-6. **No Real Auth Security:** Demo login bypasses password verification and sets a hardcoded user object.
+6. **Intelligence-only simulations:** Forecasts, recommendations, chat, and AI progress flows remain local because no Phase 2 backend endpoints exist for those features.
 
 ---
 
@@ -458,7 +457,7 @@ When implementing real backend integration and pre-procurement capabilities, the
 * Complete, polished dark-mode glassmorphic design system with custom utility styling.
 * 13 interactive domain views and responsive layout shell with collapsible sidebar and header.
 * Fully interactive UI controls, modals (`Cmd+K` search, AI progress modal), notification drawer, and filter tabs.
-* Full local data persistence across browser sessions via `localStorage`.
+* Phase 2 procurement data loads through the authenticated backend API; notifications remain locally persisted.
 * Functional CSV data file generator and browser download export.
 
 #### What Is UI-Only
@@ -470,11 +469,10 @@ When implementing real backend integration and pre-procurement capabilities, the
 * All AI actions (evaluate quotations, supplier risk scan, purchase plan generator, inventory reorder recommendation).
 * Conversational AI Assistant responses (keyword matching with 800ms timer).
 * Commodity price predictions and confidence bands.
-* User authentication and role permissions.
+* Browser authentication uses Supabase; backend authorization remains authoritative.
 
 #### What Is Missing
-* Backend REST/GraphQL API server.
-* Relational & Graph Database.
+* Phase 4+ intelligence services and related database/API capabilities.
 * Natural Language LLM Agent service.
 * Semantic Intent & Asset Interceptor UI & Engine.
 * Implicit Dependency Graph UI & Engine.
@@ -486,7 +484,52 @@ When implementing real backend integration and pre-procurement capabilities, the
 * Existing entity TypeScript interfaces in `src/types/procurement.ts` (extend them, do not break existing properties).
 
 #### What Should Be Implemented Next
-1. Build the backend foundation (API server & database schema).
-2. Integrate the **Semantic Intent & Asset Interceptor** into the RFQ creation flow.
-3. Build the **Implicit Dependency Graph** visualization and data model.
-4. Build the **Counterfactual Policy Simulator** engine.
+1. Phase 4 — Requirement Validator.
+2. Phase 5 — Implicit Dependency Engine.
+3. Phase 6 — Counterfactual Policy Simulator.
+4. Phase 7 — AI Assistant + Intelligence Integration.
+
+---
+
+## 22. Current Verification Status
+
+Phase 2 Core Procurement CRUD is implemented and verified after strict TypeScript and Zod runtime fixes. The backend typecheck and build pass, the backend starts, `/api/health` remains registered, and unauthenticated Phase 2 requests are correctly rejected by the auth middleware. Supabase database runtime access is now verified for the linked project.
+
+Phase 3A frontend navigation refactoring is complete and verified. Switched from state-based switch routing to React Router (`react-router-dom`) with `BrowserRouter`, declarative `Routes`, and `Route` matching for all 13 application views (`/dashboard`, `/suppliers`, `/rfqs`, `/quotations`, `/orders`, `/inventory`, `/spend`, `/recommendations`, `/risk`, `/forecast`, `/assistant`, `/reports`, `/settings`). Browser refresh, back/forward navigation, deep-linking, and active page sync are fully preserved and verified with a clean `npm run build`.
+
+Remote migration status (September 10, 2026): the linked Supabase project is `cgdnefckbdsewvphlngc` (Procurement AI, `ap-south-1`). Phase 1 (`202609090001`), Phase 2 (`202609090002`), supplier global-read RLS (`202609100003`), and supplier policy normalization (`202609100004`) are applied remotely. All 24 schema tables are present.
+
+Demo seed status (September 10, 2026): the verified Auth user is `ce0500ee-936c-4554-bfad-c8657c188c84`, with profile `Harshal Mahajan`, role `admin`, linked to `Bharat Precision Systems Pvt. Ltd.` (`00000000-0000-0000-0000-000000000001`). The additive `supabase/seed/phase_3_demo_expansion.sql` executed successfully twice. Final counts: organizations 2, profiles 1, departments 3, suppliers 36, rfqs 35, rfq_suppliers 100, quotations 100, purchase_orders 34, inventory_items 36, assets 34, spend_records 39, historical_data 42, supplier_risk_assessments 30, price_forecasts 30, ai_recommendations 30, requirement_validations 30, dependency_definitions 30, decision_simulations 30, simulation_scenarios 180, conversations 30, chat_messages 60, notifications 30, reports 30, audit_logs 30. All audited FK and organization relationship orphan counts are zero; the second run produced no errors or additional rows. Phase 3A and Phase 3B are complete; Phases 4–7 remain not started as listed below.
+
+## 23. Phase 3B Frontend API Integration
+
+The React frontend now uses `src/services/api.ts` for bearer-token requests through the existing Vite `/api` proxy and `src/services/supabase.ts` for browser-safe Supabase authentication. `ProcurementContext` loads suppliers, RFQs, quotations, purchase orders, inventory, assets, and spend records from the Phase 2 backend, maps snake_case API records to existing UI types, follows paginated responses, and creates RFQs plus RFQ-supplier relationships through the existing endpoints. Dashboard KPIs/risk alerts and spend analytics derive from loaded API records. RFQ supplier selection validates loaded supplier IDs. Phase 2 CRUD datasets no longer initialize from or persist to mockData/localStorage; local notifications and intelligence-only simulations remain unchanged.
+
+Verification: frontend `npm run build` and `npm run lint` pass (lint reports existing unused-import warnings); backend `npm run typecheck` and `npm run build` pass. The built backend returned `200` for `/api/health` and `401 UNAUTHORIZED` for unauthenticated `/api/suppliers`; all Phase 2 route registrations remain present. Authenticated browser data loading and seeded supplier display remain unverified because this checkout has no Vite Supabase environment variables or signed-in user/profile; `.env.example` documents the required public variables. Frontend dev-server startup is blocked in this environment by the existing Tailwind native oxide binding/Windows `EPERM` error, while the production build succeeds.
+
+## 24. Phase Status
+
+- Phase 3A React Router: COMPLETE
+- Phase 3B Frontend API Integration: COMPLETE
+- Phase 4 Requirement Validator: NOT STARTED
+- Phase 5 Implicit Dependency Engine: NOT STARTED
+- Phase 6 Counterfactual Policy Simulator: NOT STARTED
+- Phase 7 AI Assistant + Intelligence Integration: NOT STARTED
+
+## 25. Demo Account, RLS, and Seed Expansion
+
+Files changed for this work:
+
+- `supabase/migrations/202609100003_supplier_global_read.sql`
+- `supabase/migrations/202609100004_normalize_supplier_select_policy.sql`
+- `supabase/seed/phase_1_2_demo.sql`
+- `supabase/seed/phase_3_demo_expansion.sql`
+- `PROJECT_STATE.md`
+
+Schema changes: none. The existing 24-table schema was reused without adding columns or changing constraints. RLS changes: authenticated users may SELECT supplier directory rows across organizations; supplier INSERT/UPDATE/DELETE remains protected by the existing organization-scoped procurement-role policy. All other procurement and intelligence tables remain organization-scoped.
+
+Verification: the linked project and migration history were confirmed; the real Auth user/profile and organization linkage were confirmed; required table counts, foreign-key joins, and organization relationships were checked; the expansion seed ran twice without errors or count changes; backend typecheck/build and frontend build passed; `/api/health` returned 200 and unauthenticated procurement requests remained 401. Cross-organization API data display still requires a second real authenticated test account; none was created to avoid fabricating credentials.
+
+## 26. Supplier Directory Read Scope Fix
+
+The supplier CRUD service previously applied the current user's `organization_id` filter to all reads, causing the authenticated supplier directory request to return an empty page for users whose organization did not own the seeded directory rows. Supplier list/detail reads now use the existing authenticated global-read RLS policy, while supplier create/update/delete operations and delete validation remain organization-scoped and role-protected. Backend typecheck/build pass; `/api/health` returns 200; unauthenticated `/api/suppliers` returns 401. The linked database contains 36 suppliers. An authenticated API/browser supplier count could not be exercised in this checkout because no usable user access token or frontend Supabase session is available.

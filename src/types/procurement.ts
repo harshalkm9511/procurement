@@ -97,6 +97,16 @@ export interface InventoryItem {
   criticalDaysLeft: number;
 }
 
+export interface Asset {
+  id: string;
+  inventoryItemId?: string;
+  assetTag: string;
+  name: string;
+  category: string;
+  status: 'ACTIVE' | 'IN_MAINTENANCE' | 'RETIRED';
+  acquiredOn?: string;
+}
+
 export interface SpendRecord {
   month: string;
   directMaterials: number;

@@ -9,7 +9,8 @@ import type {
   AIRecommendation,
   Notification,
   User,
-  ChatMessage
+  ChatMessage,
+  Asset
 } from '../types/procurement';
 
 export const initialUser: User = {
@@ -873,6 +874,45 @@ export const initialInventory: InventoryItem[] = [
     unit: 'packs',
     supplierName: 'Dynaco Fasteners Inc.',
     criticalDaysLeft: 6
+  }
+];
+
+export const initialAssets: Asset[] = [
+  {
+    id: 'asset-001',
+    inventoryItemId: 'inv-001',
+    assetTag: 'AST-STL-001',
+    name: '316L Steel Component Stock',
+    category: 'Raw Materials & Metals',
+    status: 'ACTIVE',
+    acquiredOn: '2026-01-15'
+  },
+  {
+    id: 'asset-002',
+    inventoryItemId: 'inv-003',
+    assetTag: 'AST-BRG-002',
+    name: 'Ceramic Bearing P4 Stock',
+    category: 'Precision Machining',
+    status: 'ACTIVE',
+    acquiredOn: '2026-02-10'
+  },
+  {
+    id: 'asset-003',
+    inventoryItemId: 'inv-004',
+    assetTag: 'AST-HYD-003',
+    name: '400 Bar Hydraulic Assembly',
+    category: 'Hydraulics & Pumps',
+    status: 'IN_MAINTENANCE',
+    acquiredOn: '2025-11-20'
+  },
+  {
+    id: 'asset-004',
+    inventoryItemId: 'inv-006',
+    assetTag: 'AST-FST-004',
+    name: 'Titanium Fastener Set Stock',
+    category: 'Hardware & Fasteners',
+    status: 'ACTIVE',
+    acquiredOn: '2026-03-05'
   }
 ];
 

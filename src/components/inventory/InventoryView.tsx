@@ -15,6 +15,10 @@ export const InventoryView: React.FC = () => {
 
   const criticalItem = inventory.find(i => i.status === 'CRITICAL') || inventory[0];
 
+  if (!criticalItem) {
+    return <div className="glass-panel rounded-3xl border border-slate-800 p-8 text-sm text-slate-400">No inventory items are available for this workspace.</div>;
+  }
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'CRITICAL':

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type {
   Supplier,
   RFQ,
@@ -6,6 +7,7 @@ import type {
   PurchaseOrder,
   InventoryItem,
   SpendRecord,
+  Asset,
   PriceForecast,
   AIRecommendation,
   Notification,
@@ -15,17 +17,20 @@ import type {
 } from '../types/procurement';
 import {
   initialUser,
-  initialSuppliers,
-  initialRFQs,
-  initialQuotations,
-  initialPurchaseOrders,
+  initialAssets,
   initialInventory,
-  initialSpendData,
   priceForecasts as initialPriceForecasts,
+  initialPurchaseOrders,
+  initialQuotations,
   initialRecommendations,
   initialNotifications,
+  initialRFQs,
+  initialSpendData,
+  initialSuppliers,
   presetChatMessages
 } from '../data/mockData';
+import { ApiError, createRfq as createRfqApi, loadPhase2Data } from '../services/api';
+import { getSession, signIn, signOut, signUp, supabase, supabaseConfigError } from '../services/supabase';
 
 interface AIProcessingState {
   isOpen: boolean;
@@ -33,7 +38,7 @@ interface AIProcessingState {
   steps: string[];
   currentStep: number;
   isComplete: boolean;
-  resultData?: any;
+  resultData?: { material?: string; action?: string; details?: string };
 }
 
 interface ProcurementContextType {
@@ -53,6 +58,7 @@ interface ProcurementContextType {
   quotations: Quotation[];
   purchaseOrders: PurchaseOrder[];
   inventory: InventoryItem[];
+  assets: Asset[];
   spendData: SpendRecord[];
   forecasts: Record<string, PriceForecast>;
   recommendations: AIRecommendation[];
@@ -67,7 +73,7 @@ interface ProcurementContextType {
   setAiProcessing: React.Dispatch<React.SetStateAction<AIProcessingState>>;
   
   // Actions
-  createRFQ: (data: Omit<RFQ, 'id' | 'createdAt' | 'status' | 'responseCount'>) => RFQ;
+  createRFQ: (data: Omit<RFQ, 'id' | 'createdAt' | 'status' | 'responseCount'>) => Promise<RFQ>;
   evaluateQuotationsAI: (rfqId: string) => void;
   runSupplierRiskAnalysisAI: (supplierId: string) => void;
   generatePurchasePlanAI: (material: string) => void;
@@ -76,48 +82,39 @@ interface ProcurementContextType {
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
   updateScoringWeights: (newWeights: ScoringWeights) => void;
-  loginWithDemo: () => void;
-  logout: () => void;
+  loginWithDemo: () => Promise<void>;
+  loginWithCredentials: (email: string, password: string) => Promise<void>;
+  registerAccount: (email: string, password: string, fullName: string, organizationName: string) => Promise<void>;
+  logout: () => Promise<void>;
+  isDataLoading: boolean;
+  apiError: string | null;
+  authError: string | null;
+  retryPhase2Data: () => Promise<void>;
 }
 
 const ProcurementContext = createContext<ProcurementContextType | undefined>(undefined);
 
 export const ProcurementProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activePage, setActivePageState] = useState<string>('dashboard');
-  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>('sup-001');
-  const [selectedRFQId, setSelectedRFQId] = useState<string | null>('RFQ-2026-001');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const currentPath = location.pathname.substring(1);
+  const activePage = currentPath || 'dashboard';
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
+  const [selectedRFQId, setSelectedRFQId] = useState<string | null>(null);
   const [selectedMaterial, setSelectedMaterial] = useState<string>('Steel');
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isDataLoading, setIsDataLoading] = useState<boolean>(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   
-  const [user, setUser] = useState<User>(() => {
-    const saved = localStorage.getItem('procureai_user');
-    return saved ? JSON.parse(saved) : initialUser;
-  });
-
-  const [suppliers, setSuppliers] = useState<Supplier[]>(() => {
-    const saved = localStorage.getItem('procureai_suppliers');
-    return saved ? JSON.parse(saved) : initialSuppliers;
-  });
-
-  const [rfqs, setRfqs] = useState<RFQ[]>(() => {
-    const saved = localStorage.getItem('procureai_rfqs');
-    return saved ? JSON.parse(saved) : initialRFQs;
-  });
-
-  const [quotations, setQuotations] = useState<Quotation[]>(() => {
-    const saved = localStorage.getItem('procureai_quotations');
-    return saved ? JSON.parse(saved) : initialQuotations;
-  });
-
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(() => {
-    const saved = localStorage.getItem('procureai_orders');
-    return saved ? JSON.parse(saved) : initialPurchaseOrders;
-  });
-
-  const [inventory, setInventory] = useState<InventoryItem[]>(() => {
-    const saved = localStorage.getItem('procureai_inventory');
-    return saved ? JSON.parse(saved) : initialInventory;
-  });
+  const [user, setUser] = useState<User>(initialUser);
+  const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
+  const [rfqs, setRfqs] = useState<RFQ[]>(initialRFQs);
+  const [quotations, setQuotations] = useState<Quotation[]>(initialQuotations);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(initialPurchaseOrders);
+  const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory);
+  const [assets, setAssets] = useState<Asset[]>(initialAssets);
 
   const [notifications, setNotifications] = useState<Notification[]>(() => {
     const saved = localStorage.getItem('procureai_notifications');
@@ -125,7 +122,7 @@ export const ProcurementProvider: React.FC<{ children: React.ReactNode }> = ({ c
   });
 
   const [recommendations, setRecommendations] = useState<AIRecommendation[]>(initialRecommendations);
-  const [spendData] = useState<SpendRecord[]>(initialSpendData);
+  const [spendData, setSpendData] = useState<SpendRecord[]>(initialSpendData);
   const [forecasts] = useState<Record<string, PriceForecast>>(initialPriceForecasts);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(presetChatMessages);
 
@@ -146,33 +143,75 @@ export const ProcurementProvider: React.FC<{ children: React.ReactNode }> = ({ c
     isComplete: false
   });
 
-  // Save changes to localStorage
-  useEffect(() => {
-    localStorage.setItem('procureai_suppliers', JSON.stringify(suppliers));
-  }, [suppliers]);
-
-  useEffect(() => {
-    localStorage.setItem('procureai_rfqs', JSON.stringify(rfqs));
-  }, [rfqs]);
-
-  useEffect(() => {
-    localStorage.setItem('procureai_quotations', JSON.stringify(quotations));
-  }, [quotations]);
-
-  useEffect(() => {
-    localStorage.setItem('procureai_orders', JSON.stringify(purchaseOrders));
-  }, [purchaseOrders]);
-
-  useEffect(() => {
-    localStorage.setItem('procureai_inventory', JSON.stringify(inventory));
-  }, [inventory]);
-
   useEffect(() => {
     localStorage.setItem('procureai_notifications', JSON.stringify(notifications));
   }, [notifications]);
 
+  const applyPhase2Data = async (): Promise<void> => {
+    setIsDataLoading(true);
+    setApiError(null);
+    try {
+      const data = await loadPhase2Data();
+      setSuppliers(data.suppliers);
+      setRfqs(data.rfqs);
+      setQuotations(data.quotations);
+      setPurchaseOrders(data.purchaseOrders);
+      setInventory(data.inventory);
+      setAssets(data.assets);
+      setSpendData(data.spendData);
+      setSelectedSupplierId((current) => current && data.suppliers.some((supplier) => supplier.id === current) ? current : data.suppliers[0]?.id ?? null);
+      setSelectedRFQId((current) => current && data.rfqs.some((rfq) => rfq.id === current) ? current : data.rfqs[0]?.id ?? null);
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : error instanceof Error ? error.message : 'Unable to load procurement data';
+      setApiError(message);
+      if (error instanceof ApiError && error.status === 401) {
+        setIsAuthenticated(false);
+      }
+    } finally {
+      setIsDataLoading(false);
+    }
+  };
+
+  const userFromSession = (sessionUser: { id: string; email?: string; user_metadata?: Record<string, unknown> }): User => ({
+    id: sessionUser.id,
+    name: typeof sessionUser.user_metadata?.full_name === 'string' ? sessionUser.user_metadata.full_name : sessionUser.email ?? 'ProcureAI User',
+    email: sessionUser.email ?? '',
+    role: 'Procurement user',
+    avatarUrl: typeof sessionUser.user_metadata?.avatar_url === 'string' ? sessionUser.user_metadata.avatar_url : initialUser.avatarUrl,
+    department: 'Procurement',
+    organization: 'Organization workspace',
+  });
+
+  const applySession = async (session: Awaited<ReturnType<typeof getSession>>): Promise<void> => {
+    if (!session) {
+      setIsAuthenticated(false);
+      return;
+    }
+    setUser(userFromSession(session.user));
+    setIsAuthenticated(true);
+    await applyPhase2Data();
+  };
+
+  useEffect(() => {
+    if (!supabase) {
+      setApiError(supabaseConfigError);
+      setAuthError(supabaseConfigError);
+      return;
+    }
+    let mounted = true;
+    void getSession().then((session) => {
+      if (mounted) return applySession(session);
+    }).catch((error: unknown) => {
+      if (mounted) setAuthError(error instanceof Error ? error.message : 'Unable to restore authentication session');
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      void applySession(session).catch((error: unknown) => setApiError(error instanceof Error ? error.message : 'Unable to load procurement data'));
+    });
+    return () => { mounted = false; subscription.unsubscribe(); };
+  }, []);
+
   const setActivePage = (page: string, params?: { supplierId?: string; rfqId?: string; material?: string; targetId?: string }) => {
-    setActivePageState(page);
     if (params?.supplierId) setSelectedSupplierId(params.supplierId);
     if (params?.rfqId) setSelectedRFQId(params.rfqId);
     if (params?.material) setSelectedMaterial(params.material);
@@ -181,22 +220,14 @@ export const ProcurementProvider: React.FC<{ children: React.ReactNode }> = ({ c
       if (page === 'rfqs' || page === 'quotations') setSelectedRFQId(params.targetId);
       if (page === 'forecast') setSelectedMaterial(params.targetId);
     }
+    navigate(`/${page}`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const createRFQ = (data: Omit<RFQ, 'id' | 'createdAt' | 'status' | 'responseCount'>): RFQ => {
-    const newId = `RFQ-2026-${String(rfqs.length + 1).padStart(3, '0')}`;
-    const newRFQ: RFQ = {
-      ...data,
-      id: newId,
-      createdAt: new Date().toISOString().split('T')[0],
-      status: 'OPEN',
-      responseCount: 0
-    };
-
+  const createRFQ = async (data: Omit<RFQ, 'id' | 'createdAt' | 'status' | 'responseCount'>): Promise<RFQ> => {
+    const newRFQ = await createRfqApi(data);
     setRfqs(prev => [newRFQ, ...prev]);
 
-    // Create notification
     const newNotif: Notification = {
       id: `notif-${Date.now()}`,
       title: 'New RFQ Created',
@@ -205,10 +236,9 @@ export const ProcurementProvider: React.FC<{ children: React.ReactNode }> = ({ c
       type: 'QUOTE',
       isRead: false,
       targetPage: 'rfqs',
-      targetId: newId
+      targetId: newRFQ.id
     };
     setNotifications(prev => [newNotif, ...prev]);
-
     return newRFQ;
   };
 
@@ -233,17 +263,18 @@ export const ProcurementProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setAiProcessing(prev => ({ ...prev, currentStep: current }));
       } else {
         clearInterval(interval);
-        setQuotations(prev =>
-          prev.map(q => {
-            if (q.rfqId === rfqId) {
-              if (q.supplierId === 'sup-005' || q.id.endsWith('-c')) {
-                return { ...q, status: 'RECOMMENDED', overallScore: 94 };
-              }
-              return { ...q, status: 'SHORTLISTED' };
-            }
-            return q;
-          })
-        );
+        setQuotations(prev => {
+          const candidates = prev.filter((quotation) => quotation.rfqId === rfqId);
+          const recommendedId = candidates
+            .slice()
+            .sort((left, right) => right.overallScore - left.overallScore)[0]?.id;
+          return prev.map((quotation) => {
+            if (quotation.rfqId !== rfqId) return quotation;
+            return quotation.id === recommendedId
+              ? { ...quotation, status: 'RECOMMENDED' }
+              : { ...quotation, status: 'SHORTLISTED' };
+          });
+        });
         setAiProcessing(prev => ({ ...prev, isComplete: true }));
       }
     }, 900);
@@ -347,7 +378,7 @@ export const ProcurementProvider: React.FC<{ children: React.ReactNode }> = ({ c
       } else {
         clearInterval(interval);
         if (item) {
-          createRFQ({
+          void createRFQ({
             title: `Replenishment: ${item.product}`,
             product: item.product,
             category: item.category,
@@ -358,8 +389,8 @@ export const ProcurementProvider: React.FC<{ children: React.ReactNode }> = ({ c
             invitedSuppliersCount: 3,
             deliveryDate: new Date(Date.now() + 20 * 86400000).toISOString().split('T')[0],
             description: `Automated AI replenishment RFQ triggered due to critical stock buffer threshold.`,
-            invitedSupplierIds: ['sup-003', 'sup-005', 'sup-016']
-          });
+            invitedSupplierIds: suppliers.slice(0, 3).map(supplier => supplier.id)
+          }).catch(error => setApiError(error instanceof Error ? error.message : 'Unable to create replenishment RFQ'));
         }
         setAiProcessing(prev => ({ ...prev, isComplete: true }));
       }
@@ -379,8 +410,8 @@ export const ProcurementProvider: React.FC<{ children: React.ReactNode }> = ({ c
     // Simulated AI response generation logic based on keywords
     setTimeout(() => {
       let aiText = '';
-      let dataTable: any = undefined;
-      let actionLink: any = undefined;
+      let dataTable: ChatMessage['dataTable'];
+      let actionLink: ChatMessage['actionLink'];
 
       const lower = text.toLowerCase();
 
@@ -433,13 +464,52 @@ export const ProcurementProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setScoringWeights(newWeights);
   };
 
-  const loginWithDemo = () => {
-    setIsAuthenticated(true);
-    setUser(initialUser);
+  const loginWithCredentials = async (email: string, password: string): Promise<void> => {
+    setAuthError(null);
+    try {
+      const session = await signIn(email, password);
+      await applySession(session);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Sign in failed';
+      setAuthError(message);
+      throw error;
+    }
   };
 
-  const logout = () => {
+  const registerAccount = async (email: string, password: string, fullName: string, organizationName: string): Promise<void> => {
+    setAuthError(null);
+    try {
+      const session = await signUp(email, password, { full_name: fullName, organization_name: organizationName });
+      if (!session) throw new Error('Registration succeeded. Confirm your email, then sign in to continue.');
+      await applySession(session);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Registration failed';
+      setAuthError(message);
+      throw error;
+    }
+  };
+
+  const loginWithDemo = async (): Promise<void> => {
+    setAuthError(null);
+    try {
+      const session = await getSession();
+      if (!session) throw new Error('No active Supabase session. Use enterprise sign in with a configured account.');
+      await applySession(session);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Demo session unavailable');
+    }
+  };
+
+  const logout = async (): Promise<void> => {
+    await signOut();
     setIsAuthenticated(false);
+    setSuppliers([]);
+    setRfqs([]);
+    setQuotations([]);
+    setPurchaseOrders([]);
+    setInventory([]);
+    setAssets([]);
+    setSpendData([]);
   };
 
   return (
@@ -460,6 +530,7 @@ export const ProcurementProvider: React.FC<{ children: React.ReactNode }> = ({ c
         quotations,
         purchaseOrders,
         inventory,
+        assets,
         spendData,
         forecasts,
         recommendations,
@@ -480,7 +551,13 @@ export const ProcurementProvider: React.FC<{ children: React.ReactNode }> = ({ c
         markAllNotificationsAsRead,
         updateScoringWeights,
         loginWithDemo,
-        logout
+        loginWithCredentials,
+        registerAccount,
+        logout,
+        isDataLoading,
+        apiError,
+        authError,
+        retryPhase2Data: applyPhase2Data
       }}
     >
       {children}

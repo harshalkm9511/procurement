@@ -15,7 +15,7 @@ import {
   CartesianGrid,
   Legend
 } from 'recharts';
-import { BarChart3, TrendingUp, Calendar, PieChart as PieIcon, ArrowDownRight, Sparkles } from 'lucide-react';
+import { BarChart3, TrendingUp, Calendar, PieChart as PieIcon, Sparkles } from 'lucide-react';
 
 export const SpendAnalyticsView: React.FC = () => {
   const { spendData, suppliers } = useProcurement();
@@ -29,14 +29,25 @@ export const SpendAnalyticsView: React.FC = () => {
     return spendData;
   }, [spendData, timeRange]);
 
-  // Category breakdown calculation
-  const categoryData = [
-    { name: 'Direct Materials', value: 670000, color: '#3b82f6' },
-    { name: 'Electronics', value: 315000, color: '#06b6d4' },
-    { name: 'Logistics & Freight', value: 182000, color: '#6366f1' },
-    { name: 'MRO & Utilities', value: 71000, color: '#f59e0b' },
-    { name: 'Packaging', value: 52000, color: '#10b981' }
-  ];
+  const categoryData = React.useMemo(() => {
+    const totals = spendData.reduce((accumulator, record) => ({
+      directMaterials: accumulator.directMaterials + record.directMaterials,
+      electronics: accumulator.electronics + record.electronics,
+      logistics: accumulator.logistics + record.logistics,
+      mro: accumulator.mro + record.mro,
+      packaging: accumulator.packaging + record.packaging,
+    }), { directMaterials: 0, electronics: 0, logistics: 0, mro: 0, packaging: 0 });
+
+    return [
+      { name: 'Direct Materials', value: totals.directMaterials ?? 0, color: '#3b82f6' },
+      { name: 'Electronics', value: totals.electronics ?? 0, color: '#06b6d4' },
+      { name: 'Logistics & Freight', value: totals.logistics ?? 0, color: '#6366f1' },
+      { name: 'MRO & Utilities', value: totals.mro ?? 0, color: '#f59e0b' },
+      { name: 'Packaging', value: totals.packaging ?? 0, color: '#10b981' },
+    ];
+  }, [spendData]);
+
+  const totalSpend = spendData.reduce((sum, record) => sum + record.totalSpend, 0);
 
   // Top suppliers spend
   const topSupplierSpend = suppliers
@@ -88,13 +99,13 @@ export const SpendAnalyticsView: React.FC = () => {
           <div>
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-cyan-400" />
-              Monthly Spend & Savings Opportunity ($)
+            Monthly Spend & Savings Opportunity (₹)
             </h3>
             <p className="text-xs text-slate-400">Total spend baseline vs AI identified savings headroom</p>
           </div>
           <div className="text-right">
             <span className="text-xs text-slate-400">Total YTD Spend:</span>
-            <p className="text-lg font-extrabold text-cyan-300">$12.87M</p>
+            <p className="text-lg font-extrabold text-cyan-300">₹{totalSpend.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
           </div>
         </div>
 
@@ -113,10 +124,10 @@ export const SpendAnalyticsView: React.FC = () => {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis dataKey="month" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#64748b" tick={{ fontSize: 11 }} tickFormatter={v => `$${v / 1000}k`} />
+              <YAxis stroke="#64748b" tick={{ fontSize: 11 }} tickFormatter={v => `₹${v / 1000}k`} />
               <Tooltip
                 contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
-                formatter={(val: any) => [`$${val?.toLocaleString()}`, '']}
+                formatter={(val: unknown) => [`₹${typeof val === 'number' ? val.toLocaleString('en-IN') : ''}`, '']}
               />
               <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
               <Area type="monotone" dataKey="totalSpend" name="Total Spend ($)" stroke="#3b82f6" strokeWidth={2.5} fillOpacity={1} fill="url(#spendGradient)" />
@@ -157,7 +168,7 @@ export const SpendAnalyticsView: React.FC = () => {
                 </Pie>
                 <Tooltip
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
-                  formatter={(val: any) => [`$${val?.toLocaleString()}`, 'Spend']}
+                  formatter={(val: unknown) => [`₹${typeof val === 'number' ? val.toLocaleString('en-IN') : ''}`, 'Spend']}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -168,7 +179,7 @@ export const SpendAnalyticsView: React.FC = () => {
               <div key={cat.name} className="flex items-center gap-2 text-xs">
                 <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
                 <span className="text-slate-300 truncate">{cat.name}:</span>
-                <span className="font-semibold text-white">${(cat.value / 1000).toFixed(0)}k</span>
+                <span className="font-semibold text-white">₹{(cat.value / 1000).toFixed(0)}k</span>
               </div>
             ))}
           </div>
@@ -188,11 +199,11 @@ export const SpendAnalyticsView: React.FC = () => {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={topSupplierSpend} layout="vertical" margin={{ top: 5, right: 20, left: 40, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} tickFormatter={v => `$${v / 1000}k`} />
+                <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} tickFormatter={v => `₹${v / 1000}k`} />
                 <YAxis dataKey="name" type="category" stroke="#94a3b8" tick={{ fontSize: 11 }} width={110} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
-                  formatter={(val: any) => [`$${val?.toLocaleString()}`, 'Spend']}
+                  formatter={(val: unknown) => [`₹${typeof val === 'number' ? val.toLocaleString('en-IN') : ''}`, 'Spend']}
                 />
                 <Bar dataKey="spend" fill="#06b6d4" radius={[0, 8, 8, 0]} />
               </BarChart>
@@ -201,7 +212,7 @@ export const SpendAnalyticsView: React.FC = () => {
 
           <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-cyan-400 flex-shrink-0" />
-            <span>AI Insight: Top 5 suppliers represent 42% of total procurement spend. Supplier consolidation could potentially reduce annual spending by $184K.</span>
+            <span>AI Insight: Top 5 suppliers represent the largest share of loaded procurement spend. Supplier consolidation could reduce concentration risk.</span>
           </div>
         </div>
 

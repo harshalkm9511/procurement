@@ -18,8 +18,11 @@ export const SupplierRiskView: React.FC = () => {
   const { suppliers, selectedSupplierId, setSelectedSupplierId, runSupplierRiskAnalysisAI, setActivePage } = useProcurement();
 
   const activeSupplier = suppliers.find(s => s.id === selectedSupplierId) || suppliers[0];
-
   const [mitigationPlanActive, setMitigationPlanActive] = useState(false);
+
+  if (!activeSupplier) {
+    return <div className="glass-panel rounded-3xl border border-slate-800 p-8 text-sm text-slate-400">No suppliers are available for this workspace.</div>;
+  }
 
   // Risk distribution statistics
   const highRiskCount = suppliers.filter(s => s.riskLevel === 'HIGH').length;
